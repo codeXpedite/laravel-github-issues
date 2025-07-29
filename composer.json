@@ -1,0 +1,48 @@
+{
+    "name": "codexpedite/laravel-github-issues",
+    "description": "Automatically monitor Laravel logs and create GitHub issues for errors",
+    "type": "library",
+    "keywords": ["laravel", "github", "issues", "monitoring", "logs", "errors"],
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "CodeXpedite",
+            "email": "info@codexpedite.com"
+        }
+    ],
+    "require": {
+        "php": "^8.1",
+        "illuminate/support": "^11.0|^12.0",
+        "illuminate/console": "^11.0|^12.0",
+        "illuminate/log": "^11.0|^12.0",
+        "knplabs/github-api": "^3.13",
+        "spatie/file-system-watcher": "^1.2",
+        "http-interop/http-factory-guzzle": "^1.2"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.0|^11.0",
+        "orchestra/testbench": "^8.0|^9.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Codexpedite\\LaravelGithubIssues\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Codexpedite\\LaravelGithubIssues\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Codexpedite\\LaravelGithubIssues\\GitHubIssuesServiceProvider"
+            ]
+        }
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
