@@ -2,48 +2,33 @@
 
 namespace Codexpedite\LaravelGithubIssues\Services;
 
-use Github\Client;
-use Github\AuthMethod;
-use Http\Adapter\Guzzle7\Client as GuzzleAdapter;
-use GuzzleHttp\Client as GuzzleClient;
+use Illuminate\Support\Facades\Http;
 
 class GitHubClient
 {
-    private Client $client;
+    private string $token;
     private string $owner;
     private string $repository;
+    private string $baseUrl = 'https://api.github.com';
 
     public function __construct(string $token, string $owner, string $repository)
     {
+        $this->token = $token;
         $this->owner = $owner;
         $this->repository = $repository;
-
-        $guzzleClient = new GuzzleClient([
-            'timeout' => 30,
-        ]);
-        
-        $this->client = new Client(new GuzzleAdapter($guzzleClient));
-        
-        if (!empty($token)) {
-            $this->client->authenticate($token, null, AuthMethod::ACCESS_TOKEN);
-        }
     }
 
     public function createIssue(array $issueData): array
     {
         try {
-            $response = $this->client->issue()->create(
-                $this->owner,
-                $this->repository,
-                [
-                    'title' => $issueData['title'],
-                    'body' => $issueData['body'],
-                    'labels' => $issueData['labels'] ?? [],
-                    'assignees' => $issueData['assignees'] ?? [],
-                ]
-            );
+            $response = $this->makeRequest('POST', "/repos/{$this->owner}/{$this->repository}/issues", [
+                'title' => $issueData['title'],
+                'body' => $issueData['body'],
+                'labels' => $issueData['labels'] ?? [],
+                'assignees' => $issueData['assignees'] ?? [],
+            ]);
 
-            return $response;
+            return $response->json();
             
         } catch (\Exception $e) {
             throw new \Exception("Failed to create GitHub issue: " . $e->getMessage());
@@ -53,12 +38,11 @@ class GitHubClient
     public function addCommentToIssue(int $issueNumber, string $comment): array
     {
         try {
-            return $this->client->issue()->comments()->create(
-                $this->owner,
-                $this->repository,
-                $issueNumber,
-                ['body' => $comment]
-            );
+            $response = $this->makeRequest('POST', "/repos/{$this->owner}/{$this->repository}/issues/{$issueNumber}/comments", [
+                'body' => $comment
+            ]);
+
+            return $response->json();
         } catch (\Exception $e) {
             throw new \Exception("Failed to add comment to GitHub issue: " . $e->getMessage());
         }
@@ -67,9 +51,11 @@ class GitHubClient
     public function searchIssues(string $query): array
     {
         try {
-            return $this->client->search()->issues(
-                "repo:{$this->owner}/{$this->repository} {$query}"
-            );
+            $response = $this->makeRequest('GET', '/search/issues', [
+                'q' => "repo:{$this->owner}/{$this->repository} {$query}"
+            ]);
+
+            return $response->json();
         } catch (\Exception $e) {
             throw new \Exception("Failed to search GitHub issues: " . $e->getMessage());
         }
@@ -78,11 +64,9 @@ class GitHubClient
     public function getIssue(int $issueNumber): array
     {
         try {
-            return $this->client->issue()->show(
-                $this->owner,
-                $this->repository,
-                $issueNumber
-            );
+            $response = $this->makeRequest('GET', "/repos/{$this->owner}/{$this->repository}/issues/{$issueNumber}");
+
+            return $response->json();
         } catch (\Exception $e) {
             throw new \Exception("Failed to get GitHub issue: " . $e->getMessage());
         }
@@ -91,12 +75,11 @@ class GitHubClient
     public function closeIssue(int $issueNumber): array
     {
         try {
-            return $this->client->issue()->update(
-                $this->owner,
-                $this->repository,
-                $issueNumber,
-                ['state' => 'closed']
-            );
+            $response = $this->makeRequest('PATCH', "/repos/{$this->owner}/{$this->repository}/issues/{$issueNumber}", [
+                'state' => 'closed'
+            ]);
+
+            return $response->json();
         } catch (\Exception $e) {
             throw new \Exception("Failed to close GitHub issue: " . $e->getMessage());
         }
@@ -105,10 +88,30 @@ class GitHubClient
     public function testConnection(): bool
     {
         try {
-            $this->client->currentUser()->show();
-            return true;
+            $response = $this->makeRequest('GET', '/user');
+            return $response->successful();
         } catch (\Exception $e) {
             return false;
         }
+    }
+
+    private function makeRequest(string $method, string $endpoint, array $data = [])
+    {
+        $request = Http::withHeaders([
+            'Authorization' => "Bearer {$this->token}",
+            'Accept' => 'application/vnd.github.v3+json',
+            'User-Agent' => 'Laravel-GitHub-Issues/1.0'
+        ])->timeout(30);
+
+        $url = $this->baseUrl . $endpoint;
+
+        return match(strtoupper($method)) {
+            'GET' => $request->get($url, $data),
+            'POST' => $request->post($url, $data),
+            'PATCH' => $request->patch($url, $data),
+            'PUT' => $request->put($url, $data),
+            'DELETE' => $request->delete($url, $data),
+            default => throw new \InvalidArgumentException("Unsupported HTTP method: {$method}")
+        };
     }
 }
