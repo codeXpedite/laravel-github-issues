@@ -2,7 +2,7 @@
 
 namespace Codexpedite\LaravelGithubIssues\Services;
 
-use Spatie\FileSystemWatcher\Watch;
+use Spatie\Watcher\Watch;
 use Illuminate\Support\Facades\Log;
 
 class LogMonitorService
@@ -10,9 +10,9 @@ class LogMonitorService
     private GitHubClient $githubClient;
     private ErrorProcessor $errorProcessor;
     private array $config;
-    private ?Watch $watcher = null;
     private array $errorBuffer = [];
     private int $lastPosition = 0;
+    private bool $shouldStop = false;
 
     public function __construct(GitHubClient $githubClient, ErrorProcessor $errorProcessor, array $config)
     {
@@ -36,16 +36,19 @@ class LogMonitorService
         }
 
         $this->lastPosition = filesize($logFile);
-
-        $this->watcher = Watch::path(dirname($logFile))
-            ->onFileUpdated(function (string $path) use ($logFile) {
-                if ($path === $logFile) {
-                    $this->processNewLogEntries($logFile);
-                }
-            });
+        $this->shouldStop = false;
 
         try {
-            $this->watcher->start();
+            Watch::path(dirname($logFile))
+                ->onFileUpdated(function (string $path) use ($logFile) {
+                    if ($path === $logFile) {
+                        $this->processNewLogEntries($logFile);
+                    }
+                })
+                ->shouldContinue(function () {
+                    return !$this->shouldStop;
+                })
+                ->start();
         } catch (\Exception $e) {
             Log::error('Laravel GitHub Issues: Failed to start file watcher', [
                 'error' => $e->getMessage()
@@ -55,11 +58,7 @@ class LogMonitorService
 
     public function stop(): void
     {
-        if ($this->watcher) {
-            $this->watcher->stop();
-            $this->watcher = null;
-        }
-
+        $this->shouldStop = true;
         $this->flushBuffer();
     }
 
