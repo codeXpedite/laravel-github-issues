@@ -15,7 +15,30 @@ class GitHubIssuesServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(
             __DIR__.'/config/github-issues.php', 'github-issues'
         );
+    }
 
+    public function boot()
+    {
+        if ($this->app->runningInConsole()) {
+            $this->publishes([
+                __DIR__.'/config/github-issues.php' => config_path('github-issues.php'),
+            ], 'config');
+
+            $this->commands([
+                MonitorLogsCommand::class,
+            ]);
+        }
+
+        if (config('github-issues.enabled') && $this->isConfigured()) {
+            $this->app->booted(function () {
+                $this->registerServices();
+                $this->app[LogMonitorService::class]->start();
+            });
+        }
+    }
+
+    private function registerServices(): void
+    {
         $this->app->singleton(GitHubClient::class, function ($app) {
             $token = $app['config']['github-issues.github.token'] ?? '';
             $owner = $app['config']['github-issues.github.owner'] ?? '';
@@ -35,25 +58,6 @@ class GitHubIssuesServiceProvider extends ServiceProvider
                 $app['config']['github-issues']
             );
         });
-    }
-
-    public function boot()
-    {
-        if ($this->app->runningInConsole()) {
-            $this->publishes([
-                __DIR__.'/config/github-issues.php' => config_path('github-issues.php'),
-            ], 'config');
-
-            $this->commands([
-                MonitorLogsCommand::class,
-            ]);
-        }
-
-        if (config('github-issues.enabled') && $this->isConfigured()) {
-            $this->app->booted(function () {
-                $this->app[LogMonitorService::class]->start();
-            });
-        }
     }
 
     private function isConfigured(): bool

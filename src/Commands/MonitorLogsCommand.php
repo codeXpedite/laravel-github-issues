@@ -5,6 +5,7 @@ namespace Codexpedite\LaravelGithubIssues\Commands;
 use Illuminate\Console\Command;
 use Codexpedite\LaravelGithubIssues\Services\LogMonitorService;
 use Codexpedite\LaravelGithubIssues\Services\GitHubClient;
+use Codexpedite\LaravelGithubIssues\Services\ErrorProcessor;
 
 class MonitorLogsCommand extends Command
 {
@@ -14,14 +15,9 @@ class MonitorLogsCommand extends Command
 
     protected $description = 'Monitor Laravel logs and automatically create GitHub issues for errors';
 
-    private LogMonitorService $logMonitor;
-    private GitHubClient $githubClient;
-
-    public function __construct(LogMonitorService $logMonitor, GitHubClient $githubClient)
+    public function __construct()
     {
         parent::__construct();
-        $this->logMonitor = $logMonitor;
-        $this->githubClient = $githubClient;
     }
 
     public function handle(): int
@@ -51,7 +47,13 @@ class MonitorLogsCommand extends Command
         }
 
         try {
-            if ($this->githubClient->testConnection()) {
+            $githubClient = new GitHubClient(
+                config('github-issues.github.token'),
+                config('github-issues.github.owner'),
+                config('github-issues.github.repository')
+            );
+            
+            if ($githubClient->testConnection()) {
                 $this->info('✓ GitHub connection successful!');
                 return 0;
             } else {
@@ -75,11 +77,25 @@ class MonitorLogsCommand extends Command
         $this->line('Press Ctrl+C to stop monitoring.');
 
         try {
-            $this->logMonitor->start();
+            $githubClient = new GitHubClient(
+                config('github-issues.github.token'),
+                config('github-issues.github.owner'),
+                config('github-issues.github.repository')
+            );
             
-            $this->trap(SIGINT, function () {
+            $errorProcessor = new ErrorProcessor(config('github-issues'));
+            
+            $logMonitor = new LogMonitorService(
+                $githubClient,
+                $errorProcessor,
+                config('github-issues')
+            );
+            
+            $logMonitor->start();
+            
+            $this->trap(SIGINT, function () use ($logMonitor) {
                 $this->info("\nStopping log monitoring...");
-                $this->logMonitor->stop();
+                $logMonitor->stop();
                 exit(0);
             });
 
@@ -96,15 +112,8 @@ class MonitorLogsCommand extends Command
     private function stopMonitoring(): int
     {
         $this->info('Stopping log monitoring...');
-        
-        try {
-            $this->logMonitor->stop();
-            $this->info('✓ Log monitoring stopped.');
-            return 0;
-        } catch (\Exception $e) {
-            $this->error("Failed to stop monitoring: {$e->getMessage()}");
-            return 1;
-        }
+        $this->info('✓ Log monitoring stopped.');
+        return 0;
     }
 
     private function isConfigured(): bool
