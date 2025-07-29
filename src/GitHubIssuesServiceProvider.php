@@ -17,11 +17,11 @@ class GitHubIssuesServiceProvider extends ServiceProvider
         );
 
         $this->app->singleton(GitHubClient::class, function ($app) {
-            return new GitHubClient(
-                $app['config']['github-issues.github.token'],
-                $app['config']['github-issues.github.owner'],
-                $app['config']['github-issues.github.repository']
-            );
+            $token = $app['config']['github-issues.github.token'] ?? '';
+            $owner = $app['config']['github-issues.github.owner'] ?? '';
+            $repository = $app['config']['github-issues.github.repository'] ?? '';
+            
+            return new GitHubClient($token, $owner, $repository);
         });
 
         $this->app->singleton(ErrorProcessor::class, function ($app) {

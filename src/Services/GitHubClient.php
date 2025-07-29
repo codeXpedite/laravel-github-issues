@@ -23,7 +23,10 @@ class GitHubClient
         ]);
         
         $this->client = new Client(new GuzzleAdapter($guzzleClient));
-        $this->client->authenticate($token, null, AuthMethod::ACCESS_TOKEN);
+        
+        if (!empty($token)) {
+            $this->client->authenticate($token, null, AuthMethod::ACCESS_TOKEN);
+        }
     }
 
     public function createIssue(array $issueData): array
